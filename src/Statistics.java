@@ -15,11 +15,13 @@ public class Statistics {
     private Map<Integer, Integer> requestsByHourUTC = new HashMap<>();
     private Map<String, Integer> requestsByIP = new HashMap<>();
 
-    // Новое поле: множество адресов страниц с кодом 200
+    // Для задания #1 (если ещё не добавлено)
     private Set<String> existingPages = new HashSet<>();
-
-    // Новое поле: счетчик операционных систем
     private Map<String, Integer> osCount = new HashMap<>();
+
+    // Новые поля для задания #2
+    private Set<String> nonExistingPages = new HashSet<>(); // для URL с кодом 404
+    private Map<String, Integer> browserCount = new HashMap<>(); // подсчёт браузеров
 
     public void addEntry(LogEntry entry) {
         ZonedDateTime entryTime = entry.getTime();
@@ -39,18 +41,24 @@ public class Statistics {
         int code = entry.getResponseCode();
         requestsByCode.put(code, requestsByCode.getOrDefault(code, 0) + 1);
 
-        // Добавляем адрес страницы, если код ответа 200
         if (code == 200) {
             existingPages.add(entry.getUrl());
         }
 
-        // Подсчет операционной системы
+        if (code == 404) {
+            nonExistingPages.add(entry.getUrl());
+        }
+
         String os = entry.getAgent() != null ? entry.getAgent().getOs() : null;
         if (os != null) {
             osCount.put(os, osCount.getOrDefault(os, 0) + 1);
         }
 
-        // Суммарный размер
+        String browser = entry.getAgent() != null ? entry.getAgent().getBrowser() : null;
+        if (browser != null) {
+            browserCount.put(browser, browserCount.getOrDefault(browser, 0) + 1);
+        }
+
         totalResponseSize += entry.getResponseSize();
 
         int hourUTC = entryTime.withZoneSameInstant(ZoneOffset.UTC).getHour();
@@ -60,6 +68,45 @@ public class Statistics {
         requestsByIP.put(ip, requestsByIP.getOrDefault(ip, 0) + 1);
     }
 
+    public Set<String> getExistingPages() {
+        return Collections.unmodifiableSet(existingPages);
+    }
+
+    public Map<String, Double> getOsStatistics() {
+        Map<String, Double> osStats = new HashMap<>();
+        int totalOsCount = osCount.values().stream().mapToInt(Integer::intValue).sum();
+
+        if (totalOsCount == 0) {
+            return osStats;
+        }
+
+        for (Map.Entry<String, Integer> entry : osCount.entrySet()) {
+            osStats.put(entry.getKey(), (double) entry.getValue() / totalOsCount);
+        }
+
+        return osStats;
+    }
+
+    // возвращает множество несуществующих страниц (код 404)
+    public Set<String> getNonExistingPages() {
+        return Collections.unmodifiableSet(nonExistingPages);
+    }
+
+    // возвращает статистику браузеров в виде Map<String, Double>
+    public Map<String, Double> getBrowserStatistics() {
+        Map<String, Double> browserStats = new HashMap<>();
+        int totalBrowserCount = browserCount.values().stream().mapToInt(Integer::intValue).sum();
+
+        if (totalBrowserCount == 0) {
+            return browserStats;
+        }
+
+        for (Map.Entry<String, Integer> entry : browserCount.entrySet()) {
+            browserStats.put(entry.getKey(), (double) entry.getValue() / totalBrowserCount);
+        }
+
+        return browserStats;
+    }
     public int getEntriesCount() {
         return totalRequests;
     }
@@ -69,37 +116,15 @@ public class Statistics {
     }
 
     public double getTrafficRate() {
-        if (minTime == null || maxTime == null) return 0.0;
+        if (minTime == null || maxTime == null || minTime.equals(maxTime)) {
+            return 0.0;
+        }
         long seconds = java.time.Duration.between(minTime, maxTime).getSeconds();
         double hours = seconds / 3600.0;
-        if (hours <= 0) return totalResponseSize;
-        return totalResponseSize / hours;
-    }
-
-    /**
-     * Возвращает множество всех существующих страниц сайта (адреса с кодом 200)
-     */
-    public Set<String> getExistingPages() {
-        return Collections.unmodifiableSet(existingPages);
-    }
-
-    /**
-     * Возвращает статистику операционных систем в виде Map,
-     * где ключ — название ОС, значение — доля от 0 до 1.
-     */
-    public Map<String, Double> getOsStatistics() {
-        Map<String, Double> osStats = new HashMap<>();
-        int totalOsCount = osCount.values().stream().mapToInt(Integer::intValue).sum();
-
-        if (totalOsCount == 0) {
-            return osStats; // пустой результат, если нет данных
+        if (hours == 0) {
+            return 0.0;
         }
-
-        for (Map.Entry<String, Integer> entry : osCount.entrySet()) {
-            double ratio = (double) entry.getValue() / totalOsCount;
-            osStats.put(entry.getKey(), ratio);
-        }
-
-        return osStats;
+        return (double) totalResponseSize / hours;
     }
+
 }
