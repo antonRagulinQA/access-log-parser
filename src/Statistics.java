@@ -15,13 +15,16 @@ public class Statistics {
     private Map<Integer, Integer> requestsByHourUTC = new HashMap<>();
     private Map<String, Integer> requestsByIP = new HashMap<>();
 
-    // Для задания #1 (если ещё не добавлено)
     private Set<String> existingPages = new HashSet<>();
     private Map<String, Integer> osCount = new HashMap<>();
 
-    // Новые поля для задания #2
-    private Set<String> nonExistingPages = new HashSet<>(); // для URL с кодом 404
-    private Map<String, Integer> browserCount = new HashMap<>(); // подсчёт браузеров
+    private Set<String> nonExistingPages = new HashSet<>();
+    private Map<String, Integer> browserCount = new HashMap<>();
+
+    // Новые поля для задания
+    private int nonBotRequests = 0;
+    private int errorRequests = 0;
+    private Set<String> uniqueNonBotIPs = new HashSet<>();
 
     public void addEntry(LogEntry entry) {
         ZonedDateTime entryTime = entry.getTime();
@@ -31,8 +34,13 @@ public class Statistics {
         if (minTime == null || entryTime.isBefore(minTime)) minTime = entryTime;
         if (maxTime == null || entryTime.isAfter(maxTime)) maxTime = entryTime;
 
-        if (entry.getAgent() != null && entry.getAgent().isBot()) {
+        boolean isBot = entry.getAgent() != null && entry.getAgent().isBot();
+
+        if (isBot) {
             botCount++;
+        } else {
+            nonBotRequests++;
+            uniqueNonBotIPs.add(entry.getIpAddr());
         }
 
         HttpMethod method = entry.getMethod();
@@ -40,6 +48,10 @@ public class Statistics {
 
         int code = entry.getResponseCode();
         requestsByCode.put(code, requestsByCode.getOrDefault(code, 0) + 1);
+
+        if (code >= 400 && code < 600) {
+            errorRequests++;
+        }
 
         if (code == 200) {
             existingPages.add(entry.getUrl());
@@ -68,6 +80,39 @@ public class Statistics {
         requestsByIP.put(ip, requestsByIP.getOrDefault(ip, 0) + 1);
     }
 
+    private double getHoursInLog() {
+        if (minTime == null || maxTime == null || minTime.equals(maxTime)) {
+            return 0.0;
+        }
+        long seconds = java.time.Duration.between(minTime, maxTime).getSeconds();
+        return seconds / 3600.0;
+    }
+
+    public double getAverageVisitsPerHour() {
+        double hours = getHoursInLog();
+        if (hours == 0) {
+            return 0.0;
+        }
+        return nonBotRequests / hours;
+    }
+
+    public double getAverageErrorRequestsPerHour() {
+        double hours = getHoursInLog();
+        if (hours == 0) {
+            return 0.0;
+        }
+        return (double) errorRequests / hours;
+    }
+
+    public double getAverageVisitsPerUser() {
+        if (uniqueNonBotIPs.isEmpty()) {
+            return 0.0;
+        }
+        return (double) nonBotRequests / uniqueNonBotIPs.size();
+    }
+
+    // Ваши уже реализованные методы
+
     public Set<String> getExistingPages() {
         return Collections.unmodifiableSet(existingPages);
     }
@@ -87,12 +132,10 @@ public class Statistics {
         return osStats;
     }
 
-    // возвращает множество несуществующих страниц (код 404)
     public Set<String> getNonExistingPages() {
         return Collections.unmodifiableSet(nonExistingPages);
     }
 
-    // возвращает статистику браузеров в виде Map<String, Double>
     public Map<String, Double> getBrowserStatistics() {
         Map<String, Double> browserStats = new HashMap<>();
         int totalBrowserCount = browserCount.values().stream().mapToInt(Integer::intValue).sum();
@@ -107,6 +150,7 @@ public class Statistics {
 
         return browserStats;
     }
+
     public int getEntriesCount() {
         return totalRequests;
     }
@@ -126,5 +170,4 @@ public class Statistics {
         }
         return (double) totalResponseSize / hours;
     }
-
 }
