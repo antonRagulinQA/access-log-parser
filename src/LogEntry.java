@@ -13,6 +13,7 @@ public class LogEntry {
     private int responseSize;
     private String referer;
     private UserAgent agent;
+    private String url;
 
     // Шаблон для парсинга даты: dd/MMM/yyyy:HH:mm:ss Z (с учетом +0300)
     private static final DateTimeFormatter LOG_DATE_FORMAT = DateTimeFormatter.ofPattern("dd/MMM/yyyy:HH:mm:ss Z", Locale.ENGLISH);
@@ -57,4 +58,6 @@ public class LogEntry {
     public int getResponseSize() { return responseSize; }
     public String getReferer() { return referer; }
     public UserAgent getAgent() { return agent; }
+    public String getUrl() { return url; }
+
 }
